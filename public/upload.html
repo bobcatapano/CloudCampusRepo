@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Submit Your Work</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea { width: 100%; padding: 8px; box-sizing: border-box; }
+        button { background: #22c55e; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+<h2>Upload Portfolio Item</h2>
+<p>Logged in as a verified student. Your file will be stored securely.</p>
+
+<!-- Points directly to the composite processing route we created earlier -->
+<form action="/submit-portfolio" method="POST" enctype="multipart/form-data">
+    <div class="form-group">
+        <label for="description">File Description:</label>
+        <textarea id="description" name="description" rows="4" placeholder="Explain what this file is..." required></textarea>
+    </div>
+
+    <div class="form-group">
+        <label for="studentFile">Choose Asset (Image, Doc, or Audio):</label>
+        <input type="file" id="studentFile" name="studentFile" required>
+    </div>
+
+    <button type="submit">Submit Portfolio Item</button>
+</form>
+</body>
+</html>
