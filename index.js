@@ -227,3 +227,20 @@ app.get('/admin/view-all', authorizeUserRole, async (req, res) => {
     try {
         const searchTerm = req.query.search || '';
         const queryRequest = new sql.Request(dbPool);
+         queryRequest.input('search', sql.NVarChar, `%${searchTerm}%`);
+
+        // Pull descriptions and file links for ALL students matching the keyword search
+        const result = await queryRequest.query(`
+            SELECT s.SubmissionID, u.UserEmail, s.FileDescription, s.BlobStorageURL, s.UploadedAt
+            FROM StudentSubmissions s
+            JOIN AppUsers u ON s.StudentObjectID = u.UserObjectID
+            WHERE s.FileDescription LIKE @search OR s.OriginalFileName LIKE @search
+            ORDER BY s.UploadedAt DESC
+        `);
+
+        // Send the JSON metadata list back to your Admin HTML page to render as a gallery grid
+        res.json(result.recordset);
+    } catch (error) {
+        res.status(500).send("Failed to retrieve master asset list.");
+    }
+});
