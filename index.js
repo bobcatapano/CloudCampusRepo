@@ -78,9 +78,9 @@ sql.connect(sqlConfig)
 // Initialize M365 Entra ID Multi-Tenant Authentication Client
 const msalConfig = {
     auth: {
-        clientId: process.env.Entra__ClientId,
+        clientId: process.env.Entra_ClientId,
         authority: `https://microsoftonline.com`,
-        clientSecret: process.env.Entra__ClientSecret
+        clientSecret: process.env.Entra_ClientSecret
     }
 };
 
