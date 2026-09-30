@@ -47,18 +47,46 @@ const blobServiceClient = new BlobServiceClient(
 );
 
 // Initialize Central US Azure SQL Connection Pool configuration
-const sqlConfig = {
-    server: `${sqlServerName}.database.windows.net`,
-    database: sqlDatabaseName,
-    options: {
-        encrypt: true,
-        authentication: {
-            type: 'azure-active-directory-msi-app-service'
-        }
-    }
-};
+//const sqlConfig = {
+//    server: `${sqlServerName}.database.windows.net`,
+//    database: sqlDatabaseName,
+//    options: {
+//        encrypt: true,
+//        authentication: {
+//            type: 'azure-active-directory-msi-app-service'
+//        }
+//    }
+//};
+// Dynamic Connection Function to grab tokens before connecting
+async function initializeDatabaseConnection() {
+    try {
+        console.log("Requesting access token for Azure SQL over the VNet...");
+        
+        // 1. Fetch a token explicitly scoped for Azure SQL Database
+        const sqlTokenResult = await azureCredential.getToken("https://windows.net");
+        
+        // 2. Inject that token string straight into your driver settings
+        const sqlConfig = {
+            server: `${sqlServerName}.database.windows.net`,
+            database: sqlDatabaseName,
+            token: sqlTokenResult.token, // 🔑 Drops your identity token directly into the login packet!
+            options: {
+                encrypt: true,
+                trustServerCertificate: false // Standard security for cloud servers
+            }
+        };
 
+        // 3. Connect the pool using the token credentials
+        dbPool = await sql.connect(sqlConfig);
+        console.log("🎉 SUCCESS: Connected to Azure SQL privately via Managed Identity!");
+    } catch (err) {
+        console.error("Database connection failure:", err.message);
+    }
+}
+
+// Execute the connection routine at server startup
 let dbPool;
+initializeDatabaseConnection();
 
 // Connect to Azure SQL at server bootup
 sql.connect(sqlConfig)
