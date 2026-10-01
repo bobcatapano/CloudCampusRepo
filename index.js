@@ -67,7 +67,7 @@ app.use(express.json());
         
         // 2. Inject that token string straight into your driver settings
 //////        const sqlConfig = {
-            server: `${sqlServerName}.database.windows.net`,
+ //           server: `${sqlServerName}.database.windows.net`,
 //////            database: sqlDatabaseName,
 //////            token: sqlTokenResult.token, // 🔑 Drops your identity token directly into the login packet!
 //////            options: {
@@ -92,7 +92,8 @@ app.use(express.json());
 // 2. AZURE INFRASTRUCTURE CREDENTIALS SETUP
 // ==========================================
 
-// Uses your App Service Managed Identity
+/// Uses your App Service Managed Identity
+
 const azureCredential = new DefaultAzureCredential();
 
 // Read Azure infrastructure names from App Service Environment Variables
