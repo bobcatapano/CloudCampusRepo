@@ -122,6 +122,17 @@ async function initializeDatabaseConnection() {
         }
 
         console.log("Azure SQL access token acquired.");
+        const tokenParts = sqlTokenResult.token.split('.');
+
+        if (tokenParts.length === 3) {
+        const tokenPayload = JSON.parse(
+        Buffer.from(tokenParts[1], 'base64url').toString('utf8')
+        );
+
+        console.log("SQL token audience:", tokenPayload.aud);
+        console.log("SQL token tenant:", tokenPayload.tid);
+        console.log("SQL token object ID:", tokenPayload.oid);
+}
 
         const sqlConfig = {
             server: `${sqlServerName}.database.windows.net`,
