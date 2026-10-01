@@ -114,7 +114,7 @@ async function initializeDatabaseConnection() {
 
         // Request an Azure SQL access token
         const sqlTokenResult = await azureCredential.getToken(
-            "https://database.windows.net//.default"
+            "https://database.windows.net/.default"
         );
 
         if (!sqlTokenResult || !sqlTokenResult.token) {
