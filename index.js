@@ -160,20 +160,6 @@ let dbPool;
 
 initializeDatabaseConnection();
 
-// Connect to Azure SQL at server bootup
-//sql.connect(sqlConfig)
-//    .then(pool => {
-//        dbPool = pool;
-//        console.log(
-//            "Connected to Azure SQL privately via Managed Identity + VNet Integration."
-//        );
-//    })
-//    .catch(err => {
-//        console.error(
-//            "Database connection failure:",
-//            err.message
-//        );
-//    });
 
 // Initialize M365 Entra ID Multi-Tenant Authentication Client
 const msalConfig = {
