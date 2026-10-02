@@ -134,15 +134,29 @@ async function initializeDatabaseConnection() {
         console.log("SQL token object ID:", tokenPayload.oid);
 }
 
-        const sqlConfig = {
+        // const sqlConfig = {
+        //     server: `${sqlServerName}.database.windows.net`,
+        //     database: sqlDatabaseName,
+
+        //     authentication: {
+        //         type: "azure-active-directory-access-token",
+        //         options: {
+        //             token: sqlTokenResult.token
+        //         }
+        //     },
+
+        //     options: {
+        //         encrypt: true,
+        //         trustServerCertificate: false
+        //     }
+        // };
+         const sqlConfig = {
             server: `${sqlServerName}.database.windows.net`,
             database: sqlDatabaseName,
 
+            // Switch to native MSI credentials type
             authentication: {
-                type: "azure-active-directory-access-token",
-                options: {
-                    token: sqlTokenResult.token
-                }
+                type: "azure-active-directory-msi-credentials"
             },
 
             options: {
