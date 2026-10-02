@@ -97,100 +97,6 @@ app.use(express.json());
 // const azureCredential = new DefaultAzureCredential();
 
 // // Read Azure infrastructure names from App Service Environment Variables
-// const storageAccountName = process.env.AZURE_STORAGE_ACCOUNT_NAME;
-// const sqlServerName = process.env.AZURE_SQL_SERVER_NAME;
-// const sqlDatabaseName = process.env.AZURE_DATABASE_NAME;
-
-// // Initialize Blob Storage
-// const blobServiceClient = new BlobServiceClient(
-//     `https://${storageAccountName}.blob.core.windows.net`,
-//     azureCredential
-// );
-
-// // Azure SQL connection
-// async function initializeDatabaseConnection() {
-//     try {
-//         console.log("Requesting access token for Azure SQL...");
-
-//         // Request an Azure SQL access token
-//         const sqlTokenResult = await azureCredential.getToken(
-//             "https://database.windows.net/.default"
-//         );
-
-//         if (!sqlTokenResult || !sqlTokenResult.token) {
-//             throw new Error("Failed to obtain Azure SQL access token.");
-//         }
-
-//         console.log("Azure SQL access token acquired.");
-//         const tokenParts = sqlTokenResult.token.split('.');
-
-//         if (tokenParts.length === 3) {
-//         const tokenPayload = JSON.parse(
-//         Buffer.from(tokenParts[1], 'base64url').toString('utf8')
-//         );
-
-//         console.log("SQL token audience:", tokenPayload.aud);
-//         console.log("SQL token tenant:", tokenPayload.tid);
-//         console.log("SQL token object ID:", tokenPayload.oid);
-// }
-
-//         const sqlConfig = {
-//             server: `${sqlServerName}.database.windows.net`,
-//             database: sqlDatabaseName,
-
-//             authentication: {
-//                 type: "azure-active-directory-access-token",
-//                 options: {
-//                     token: sqlTokenResult.token
-//                 }
-//             },
-
-//             options: {
-//                 encrypt: true,
-//                 trustServerCertificate: false
-//             }
-//         };
-
-//         dbPool = await sql.connect(sqlConfig);
-
-//         console.log(
-//             "SUCCESS: Connected to Azure SQL using Managed Identity!"
-//         );
-
-//         return dbPool;
-
-//     } catch (err) {
-//         console.error(
-//             "Database connection failure:",
-//             err.message
-//         );
-//     }
-// }
-
-// let dbPool;
-
-// initializeDatabaseConnection();
-
-
-// // Initialize M365 Entra ID Multi-Tenant Authentication Client
-// const msalConfig = {
-//     auth: {
-//         clientId: process.env.Entra_ClientId,
-//         authority: `https://microsoftonline.com`,
-//         clientSecret: process.env.Entra_ClientSecret
-//     }
-// };
-
-// const cca = new msal.ConfidentialClientApplication(msalConfig);
-
-// ==========================================
-// 2. NEWER AZURE INFRASTRUCTURE CREDENTIALS SETUP -- alternatively using SQL username/password for simplicity
-// ==========================================
-
-// Uses your App Service Managed Identity for Blob Storage
-const azureCredential = new DefaultAzureCredential();
-
-// Read Azure infrastructure names from App Service Environment Variables
 const storageAccountName = process.env.AZURE_STORAGE_ACCOUNT_NAME;
 const sqlServerName = process.env.AZURE_SQL_SERVER_NAME;
 const sqlDatabaseName = process.env.AZURE_DATABASE_NAME;
@@ -201,16 +107,44 @@ const blobServiceClient = new BlobServiceClient(
     azureCredential
 );
 
-// Azure SQL connection using SQL username/password
+// Azure SQL connection
 async function initializeDatabaseConnection() {
     try {
-        console.log("Connecting to Azure SQL using SQL authentication...");
+        console.log("Requesting access token for Azure SQL...");
+
+        // Request an Azure SQL access token
+        const sqlTokenResult = await azureCredential.getToken(
+            "https://database.windows.net/.default"
+        );
+
+        if (!sqlTokenResult || !sqlTokenResult.token) {
+            throw new Error("Failed to obtain Azure SQL access token.");
+        }
+
+        console.log("Azure SQL access token acquired.");
+        const tokenParts = sqlTokenResult.token.split('.');
+
+        if (tokenParts.length === 3) {
+        const tokenPayload = JSON.parse(
+        Buffer.from(tokenParts[1], 'base64url').toString('utf8')
+        );
+
+        console.log("SQL token audience:", tokenPayload.aud);
+        console.log("SQL token tenant:", tokenPayload.tid);
+        console.log("SQL token object ID:", tokenPayload.oid);
+}
 
         const sqlConfig = {
             server: `${sqlServerName}.database.windows.net`,
             database: sqlDatabaseName,
-            user: process.env.DB_USER,
-            password: process.env.DB_PASSWORD,
+
+            authentication: {
+                type: "azure-active-directory-access-token",
+                options: {
+                    token: sqlTokenResult.token
+                }
+            },
+
             options: {
                 encrypt: true,
                 trustServerCertificate: false
@@ -220,7 +154,7 @@ async function initializeDatabaseConnection() {
         dbPool = await sql.connect(sqlConfig);
 
         console.log(
-            "SUCCESS: Connected to Azure SQL using SQL username/password!"
+            "SUCCESS: Connected to Azure SQL using Managed Identity!"
         );
 
         return dbPool;
@@ -236,6 +170,20 @@ async function initializeDatabaseConnection() {
 let dbPool;
 
 initializeDatabaseConnection();
+
+
+// Initialize M365 Entra ID Multi-Tenant Authentication Client
+const msalConfig = {
+    auth: {
+        clientId: process.env.Entra_ClientId,
+        authority: `https://microsoftonline.com`,
+        clientSecret: process.env.Entra_ClientSecret
+    }
+};
+
+const cca = new msal.ConfidentialClientApplication(msalConfig);
+
+
 
 // ==========================================
 // 3. SECURITY GATE MIDDLEWARE (RBAC)
