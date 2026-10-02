@@ -94,7 +94,7 @@ app.use(express.json());
 
 /// Uses your App Service Managed Identity
 
-// const azureCredential = new DefaultAzureCredential();
+const azureCredential = new DefaultAzureCredential();
 
 // // Read Azure infrastructure names from App Service Environment Variables
 const storageAccountName = process.env.AZURE_STORAGE_ACCOUNT_NAME;
