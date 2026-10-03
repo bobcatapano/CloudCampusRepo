@@ -156,7 +156,7 @@ async function initializeDatabaseConnection() {
 
             // Switch to native MSI credentials type
             authentication: {
-                type: "azure-active-directory-msi-app-credentials"
+                type: "azure-active-directory-msi-app-service"
             },
 
             options: {
