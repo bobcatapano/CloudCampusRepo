@@ -102,6 +102,8 @@ const azureCredential = new DefaultAzureCredential();
 const storageAccountName = process.env.AZURE_STORAGE_ACCOUNT_NAME;
 const sqlServerName = process.env.AZURE_SQL_SERVER_NAME;
 const sqlDatabaseName = process.env.AZURE_DATABASE_NAME;
+const dbUser = process.env.DB_USER;
+const dbPassword = process.env.DB_PASSWORD;
 
 // Initialize Blob Storage
 const blobServiceClient = new BlobServiceClient(
@@ -273,43 +275,83 @@ const blobServiceClient = new BlobServiceClient(
 //         );
 //     }
 // }
+// async function initializeDatabaseConnection() {
+//     try {
+//         console.log("Forcing dedicated ManagedIdentityCredential for Azure SQL...");
+
+//         // Bypasses DefaultAzureCredential's environment checks and targets the local identity directly
+//         const azureCredential = new ManagedIdentityCredential();
+
+//         // Request the Azure SQL access token
+//         const sqlTokenResult = await azureCredential.getToken(
+//             "https://database.windows.net/.default"
+//         );
+
+//         if (!sqlTokenResult || !sqlTokenResult.token) {
+//             throw new Error("Failed to obtain Azure SQL access token.");
+//         }
+
+//         console.log("Azure SQL access token acquired successfully!");
+
+//         const sqlConfig = {
+//             server: `${sqlServerName}.database.windows.net`,
+//             database: sqlDatabaseName,
+//             authentication: {
+//                 type: "azure-active-directory-access-token",
+//                 options: {
+//                     token: sqlTokenResult.token
+//                 }
+//             },
+//             options: {
+//                 encrypt: true,
+//                 trustServerCertificate: false
+//             }
+//         };
+
+//         dbPool = await sql.connect(sqlConfig);
+        
+//         console.log(
+//             "SUCCESS: Connected to Azure SQL using Dedicated Managed Identity!"
+//         );
+
+//         return dbPool;
+
+//     } catch (err) {
+//         console.error(
+//             "Database connection failure:",
+//             err.message
+//         );
+//     }
+// }
+
 async function initializeDatabaseConnection() {
     try {
-        console.log("Forcing dedicated ManagedIdentityCredential for Azure SQL...");
-
-        // Bypasses DefaultAzureCredential's environment checks and targets the local identity directly
-        const azureCredential = new ManagedIdentityCredential();
-
-        // Request the Azure SQL access token
-        const sqlTokenResult = await azureCredential.getToken(
-            "https://database.windows.net/.default"
-        );
-
-        if (!sqlTokenResult || !sqlTokenResult.token) {
-            throw new Error("Failed to obtain Azure SQL access token.");
-        }
-
-        console.log("Azure SQL access token acquired successfully!");
+        console.log("Connecting to Azure SQL Server via standard SQL Authentication...");
 
         const sqlConfig = {
             server: `${sqlServerName}.database.windows.net`,
             database: sqlDatabaseName,
+            
+            // Define standard SQL Server credentials
+            user: dbUser,
+            password: dbPassword,
+
+            // Explicitly set type to default for username/password login
             authentication: {
-                type: "azure-active-directory-access-token",
-                options: {
-                    token: sqlTokenResult.token
-                }
+                type: "default"
             },
+
             options: {
-                encrypt: true,
-                trustServerCertificate: false
+                encrypt: true, // Crucial for Azure SQL connections
+                trustServerCertificate: false // Enforce strict certificate checks
             }
         };
 
+        // Initialize the connection pool
         dbPool = await sql.connect(sqlConfig);
-        
+
         console.log(
-            "SUCCESS: Connected to Azure SQL using Dedicated Managed Identity!"
+            "SUCCESS: Connected to Azure SQL Database using SQL Authentication!"
         );
 
         return dbPool;
