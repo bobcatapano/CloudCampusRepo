@@ -108,13 +108,90 @@ const blobServiceClient = new BlobServiceClient(
 );
 
 // Azure SQL connection
+// async function initializeDatabaseConnection() {
+//     try {
+//         console.log("Requesting access token for Azure SQL...");
+
+//         // Request an Azure SQL access token
+//         const sqlTokenResult = await azureCredential.getToken(
+//             "https://database.windows.net/.default"
+//         );
+
+//         if (!sqlTokenResult || !sqlTokenResult.token) {
+//             throw new Error("Failed to obtain Azure SQL access token.");
+//         }
+
+//         console.log("Azure SQL access token acquired.");
+//         const tokenParts = sqlTokenResult.token.split('.');
+
+//         if (tokenParts.length === 3) {
+//         const tokenPayload = JSON.parse(
+//         Buffer.from(tokenParts[1], 'base64url').toString('utf8')
+//         );
+
+//         console.log("SQL token audience:", tokenPayload.aud);
+//         console.log("SQL token tenant:", tokenPayload.tid);
+//         console.log("SQL token object ID:", tokenPayload.oid);
+// }
+
+//         // const sqlConfig = {
+//         //     server: `${sqlServerName}.database.windows.net`,
+//         //     database: sqlDatabaseName,
+
+//         //     authentication: {
+//         //         type: "azure-active-directory-access-token",
+//         //         options: {
+//         //             token: sqlTokenResult.token
+//         //         }
+//         //     },
+
+//         //     options: {
+//         //         encrypt: true,
+//         //         trustServerCertificate: false
+//         //     }
+//         // };
+//          const sqlConfig = {
+//             server: `${sqlServerName}.database.windows.net`,
+//             database: sqlDatabaseName,
+
+//             // Switch to native MSI credentials type
+//             authentication: {
+//                 type: "azure-active-directory-msi-app-service"
+//             },
+
+//             options: {
+//                 encrypt: true,
+//                 trustServerCertificate: false
+//             }
+//         };
+
+//         dbPool = await sql.connect(sqlConfig);
+
+//         console.log(
+//             "SUCCESS: Connected to Azure SQL using Managed Identity!"
+//         );
+
+//         return dbPool;
+
+//     } catch (err) {
+//         console.error(
+//             "Database connection failure:",
+//             err.message
+//         );
+//     }
+// }
 async function initializeDatabaseConnection() {
     try {
-        console.log("Requesting access token for Azure SQL...");
+        console.log("Requesting access token for Azure SQL explicitly under the WGU Tenant...");
 
-        // Request an Azure SQL access token
+        // FORCE DefaultAzureCredential to target your WGU Tenant ID directly
+        const azureCredential = new DefaultAzureCredential({
+            tenantId: "422972e9-90c8-40e4-a9f2-f2b5cd1c4888" 
+        });
+
+        // Request the Azure SQL access token inside that specific WGU boundary
         const sqlTokenResult = await azureCredential.getToken(
-            "https://database.windows.net/.default"
+            "https://windows.net"
         );
 
         if (!sqlTokenResult || !sqlTokenResult.token) {
@@ -122,43 +199,16 @@ async function initializeDatabaseConnection() {
         }
 
         console.log("Azure SQL access token acquired.");
-        const tokenParts = sqlTokenResult.token.split('.');
 
-        if (tokenParts.length === 3) {
-        const tokenPayload = JSON.parse(
-        Buffer.from(tokenParts[1], 'base64url').toString('utf8')
-        );
-
-        console.log("SQL token audience:", tokenPayload.aud);
-        console.log("SQL token tenant:", tokenPayload.tid);
-        console.log("SQL token object ID:", tokenPayload.oid);
-}
-
-        // const sqlConfig = {
-        //     server: `${sqlServerName}.database.windows.net`,
-        //     database: sqlDatabaseName,
-
-        //     authentication: {
-        //         type: "azure-active-directory-access-token",
-        //         options: {
-        //             token: sqlTokenResult.token
-        //         }
-        //     },
-
-        //     options: {
-        //         encrypt: true,
-        //         trustServerCertificate: false
-        //     }
-        // };
-         const sqlConfig = {
+        const sqlConfig = {
             server: `${sqlServerName}.database.windows.net`,
             database: sqlDatabaseName,
-
-            // Switch to native MSI credentials type
             authentication: {
-                type: "azure-active-directory-msi-app-service"
+                type: "azure-active-directory-access-token",
+                options: {
+                    token: sqlTokenResult.token
+                }
             },
-
             options: {
                 encrypt: true,
                 trustServerCertificate: false
@@ -166,18 +216,11 @@ async function initializeDatabaseConnection() {
         };
 
         dbPool = await sql.connect(sqlConfig);
-
-        console.log(
-            "SUCCESS: Connected to Azure SQL using Managed Identity!"
-        );
-
+        console.log("SUCCESS: Connected to WGU Azure SQL using WGU Tenant Identity!");
         return dbPool;
 
     } catch (err) {
-        console.error(
-            "Database connection failure:",
-            err.message
-        );
+        console.error("Database connection failure:", err.message);
     }
 }
 
