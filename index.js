@@ -600,6 +600,23 @@ app.post(
     }
 );
 
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
+
+// ==========================================
+// HOME PAGE
+// ==========================================
+
+app.get('/', (req, res) => {
+    res.sendFile(
+        path.join(
+            __dirname,
+            'public',
+            'index.html'
+        )
+    );
+});
+
 // --- THE ADMIN GLOBAL SEARCH & FILTER REST API ---
 
 app.get(
