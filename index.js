@@ -176,7 +176,8 @@ const msalConfig = {
         clientId: entraClientId,
 
         authority:
-            `https://login.microsoftonline.com/${entraTenantId}`,
+          `https://login.microsoftonline.com/common`,
+          //  `https://login.microsoftonline.com/${entraTenantId}`,
 
         clientSecret: entraClientSecret
     }
