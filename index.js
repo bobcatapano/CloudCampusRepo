@@ -344,6 +344,7 @@ async function initializeDatabaseConnection() {
             options: {
                 encrypt: true, // Crucial for Azure SQL connections
                 trustServerCertificate: false // Enforce strict certificate checks
+                 connectTimeout: 90000 // ⏳ Gives the serverless database a full 60 seconds to wake up
             }
         };
 
