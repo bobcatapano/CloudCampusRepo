@@ -4,427 +4,283 @@ const msal = require('@azure/msal-node');
 const multer = require('multer');
 const sql = require('mssql');
 const { DefaultAzureCredential } = require('@azure/identity');
-const { ManagedIdentityCredential } = require('@azure/identity');
-
 const { BlobServiceClient } = require('@azure/storage-blob');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 
 const app = express();
-const upload = multer({ storage: multer.memoryStorage() }); // Temporarily buffer uploaded files in memory
+const upload = multer({ storage: multer.memoryStorage() });
 
 // ==========================================
 // 1. STATE & SECURITY SESSION CONFIGURATION
 // ==========================================
 
+const sessionSecret =
+    process.env.SESSION_SECRET || 'local-development-session-secret';
+
 app.use(session({
-    secret: 'portfolio-secure-session-key', // Change this to a random string in production
+    secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: false // Set to true if deploying to HTTPS behind Front Door later
+        // App Service/Front Door uses HTTPS in production.
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        sameSite: 'lax'
     }
 }));
 
-// Serve static assets from your local 'public' project root directory
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
 // ==========================================
-// 2. AZURE INFRASTRUCTURE CREDENTIALS SETUP
+// 2. AZURE INFRASTRUCTURE CONFIGURATION
 // ==========================================
 
-// Uses your App Service Managed Identity
-////////const azureCredential = new DefaultAzureCredential();
-
-// Read physical infrastructure names dynamically from Web App Environment Variables
-////////const storageAccountName = process.env.AZURE_STORAGE_ACCOUNT_NAME;
-////////const sqlServerName = process.env.AZURE_SQL_SERVER_NAME;
-////////const sqlDatabaseName = process.env.AZURE_DATABASE_NAME;
-
-// Initialize East US Blob Storage Service Client
-//////const blobServiceClient = new BlobServiceClient(
-//////    `https://${storageAccountName}.blob.core.windows.net`,
-//////    azureCredential
-/////);
-
-// Initialize Central US Azure SQL Connection Pool configuration
-//const sqlConfig = {
-//    server: `${sqlServerName}.database.windows.net`,
-//    database: sqlDatabaseName,
-//    options: {
-//        encrypt: true,
-//        authentication: {
-//            type: 'azure-active-directory-msi-app-service'
-//        }
-//    }
-//};
-// Dynamic Connection Function to grab tokens before connecting
-//////async function initializeDatabaseConnection() {
-//////    try {
-//////        console.log("Requesting access token for Azure SQL over the VNet...");
-        
-        // 1. Fetch a token explicitly scoped for Azure SQL Database
-//////        const sqlTokenResult = await azureCredential.getToken("https://windows.net");
-        
-        // 2. Inject that token string straight into your driver settings
-//////        const sqlConfig = {
- //           server: `${sqlServerName}.database.windows.net`,
-//////            database: sqlDatabaseName,
-//////            token: sqlTokenResult.token, // 🔑 Drops your identity token directly into the login packet!
-//////            options: {
-//////                encrypt: true,
-//////                trustServerCertificate: false // Standard security for cloud servers
-//////            }
-//////        };
-
-        // 3. Connect the pool using the token credentials
-//////        dbPool = await sql.connect(sqlConfig);
-//////        console.log("🎉 SUCCESS: Connected to Azure SQL privately via Managed Identity!");
-//////    } catch (err) {
-/////        console.error("Database connection failure:", err.message);
-/////    }
-/////}
-
-// Execute the connection routine at server startup
-/////let dbPool;
-/////initializeDatabaseConnection();
-
-// ==========================================
-// 2. AZURE INFRASTRUCTURE CREDENTIALS SETUP 
-// ==========================================
-
-/// Uses your App Service Managed Identity
-
+// Blob Storage continues to use the App Service managed identity.
+// SQL Database uses standard SQL username/password authentication.
 const azureCredential = new DefaultAzureCredential();
 
-// // Read Azure infrastructure names from App Service Environment Variables
 const storageAccountName = process.env.AZURE_STORAGE_ACCOUNT_NAME;
 const sqlServerName = process.env.AZURE_SQL_SERVER_NAME;
 const sqlDatabaseName = process.env.AZURE_DATABASE_NAME;
 const dbUser = process.env.DB_USER;
 const dbPassword = process.env.DB_PASSWORD;
 
-// Initialize Blob Storage
-const blobServiceClient = new BlobServiceClient(
-    `https://${storageAccountName}.blob.core.windows.net`,
-    azureCredential
-);
+if (!sqlServerName) {
+    throw new Error(
+        'Missing required environment variable: AZURE_SQL_SERVER_NAME'
+    );
+}
 
-// Azure SQL connection
-// async function initializeDatabaseConnection() {
-//     try {
-//         console.log("Requesting access token for Azure SQL...");
+if (!sqlDatabaseName) {
+    throw new Error(
+        'Missing required environment variable: AZURE_DATABASE_NAME'
+    );
+}
 
-//         // Request an Azure SQL access token
-//         const sqlTokenResult = await azureCredential.getToken(
-//             "https://database.windows.net/.default"
-//         );
+if (!dbUser) {
+    throw new Error(
+        'Missing required environment variable: DB_USER'
+    );
+}
 
-//         if (!sqlTokenResult || !sqlTokenResult.token) {
-//             throw new Error("Failed to obtain Azure SQL access token.");
-//         }
+if (!dbPassword) {
+    throw new Error(
+        'Missing required environment variable: DB_PASSWORD'
+    );
+}
 
-//         console.log("Azure SQL access token acquired.");
-//         const tokenParts = sqlTokenResult.token.split('.');
+if (!storageAccountName) {
+    console.warn(
+        'WARNING: AZURE_STORAGE_ACCOUNT_NAME is not configured. ' +
+        'Blob upload functionality will not work until it is set.'
+    );
+}
 
-//         if (tokenParts.length === 3) {
-//         const tokenPayload = JSON.parse(
-//         Buffer.from(tokenParts[1], 'base64url').toString('utf8')
-//         );
+// Only create the Blob client when the storage account name exists.
+// This keeps SQL/authentication startup independent of Blob configuration.
+const blobServiceClient = storageAccountName
+    ? new BlobServiceClient(
+        `https://${storageAccountName}.blob.core.windows.net`,
+        azureCredential
+    )
+    : null;
 
-//         console.log("SQL token audience:", tokenPayload.aud);
-//         console.log("SQL token tenant:", tokenPayload.tid);
-//         console.log("SQL token object ID:", tokenPayload.oid);
-// }
+// ==========================================
+// 3. AZURE SQL CONNECTION
+// ==========================================
 
-//         // const sqlConfig = {
-//         //     server: `${sqlServerName}.database.windows.net`,
-//         //     database: sqlDatabaseName,
-
-//         //     authentication: {
-//         //         type: "azure-active-directory-access-token",
-//         //         options: {
-//         //             token: sqlTokenResult.token
-//         //         }
-//         //     },
-
-//         //     options: {
-//         //         encrypt: true,
-//         //         trustServerCertificate: false
-//         //     }
-//         // };
-//          const sqlConfig = {
-//             server: `${sqlServerName}.database.windows.net`,
-//             database: sqlDatabaseName,
-
-//             // Switch to native MSI credentials type
-//             authentication: {
-//                 type: "azure-active-directory-msi-app-service"
-//             },
-
-//             options: {
-//                 encrypt: true,
-//                 trustServerCertificate: false
-//             }
-//         };
-
-//         dbPool = await sql.connect(sqlConfig);
-
-//         console.log(
-//             "SUCCESS: Connected to Azure SQL using Managed Identity!"
-//         );
-
-//         return dbPool;
-
-//     } catch (err) {
-//         console.error(
-//             "Database connection failure:",
-//             err.message
-//         );
-//     }
-// }
-// async function initializeDatabaseConnection() {
-//     try {
-//         console.log("Requesting access token for Azure SQL explicitly under the WGU Tenant...");
-
-//         // FORCE DefaultAzureCredential to target your WGU Tenant ID directly
-//         const azureCredential = new DefaultAzureCredential({
-//             tenantId: "422972e9-90c8-40e4-a9f2-f2b5cd1c4888" 
-//         });
-
-//         // Request the Azure SQL access token inside that specific WGU boundary
-//         const sqlTokenResult = await azureCredential.getToken(
-//             "https://windows.net"
-//         );
-
-//         if (!sqlTokenResult || !sqlTokenResult.token) {
-//             throw new Error("Failed to obtain Azure SQL access token.");
-//         }
-
-//         console.log("Azure SQL access token acquired.");
-
-//         const sqlConfig = {
-//             server: `${sqlServerName}.database.windows.net`,
-//             database: sqlDatabaseName,
-//             authentication: {
-//                 type: "azure-active-directory-access-token",
-//                 options: {
-//                     token: sqlTokenResult.token
-//                 }
-//             },
-//             options: {
-//                 encrypt: true,
-//                 trustServerCertificate: false
-//             }
-//         };
-
-//         dbPool = await sql.connect(sqlConfig);
-//         console.log("SUCCESS: Connected to WGU Azure SQL using WGU Tenant Identity!");
-//         return dbPool;
-
-//     } catch (err) {
-//         console.error("Database connection failure:", err.message);
-//     }
-// }
-// async function initializeDatabaseConnection() {
-//     try {
-//         console.log("Requesting access token for Azure SQL via native environment settings...");
-
-//         // Leave this empty! It will automatically discover and use the App Service identity.
-//         const azureCredential = new DefaultAzureCredential();
-
-//         // Request the Azure SQL access token
-//         const sqlTokenResult = await azureCredential.getToken(
-//             "https://windows.net"
-//         );
-
-//         if (!sqlTokenResult || !sqlTokenResult.token) {
-//             throw new Error("Failed to obtain Azure SQL access token.");
-//         }
-
-//         console.log("Azure SQL access token acquired successfully!");
-
-//         const sqlConfig = {
-//             server: `${sqlServerName}.database.windows.net`,
-//             database: sqlDatabaseName,
-//             authentication: {
-//                 type: "azure-active-directory-access-token",
-//                 options: {
-//                     token: sqlTokenResult.token
-//                 }
-//             },
-//             options: {
-//                 encrypt: true,
-//                 trustServerCertificate: false
-//             }
-//         };
-
-//         dbPool = await sql.connect(sqlConfig);
-        
-//         console.log(
-//             "SUCCESS: Connected to Azure SQL using Managed Identity!"
-//         );
-
-//         return dbPool;
-
-//     } catch (err) {
-//         console.error(
-//             "Database connection failure:",
-//             err.message
-//         );
-//     }
-// }
-// async function initializeDatabaseConnection() {
-//     try {
-//         console.log("Forcing dedicated ManagedIdentityCredential for Azure SQL...");
-
-//         // Bypasses DefaultAzureCredential's environment checks and targets the local identity directly
-//         const azureCredential = new ManagedIdentityCredential();
-
-//         // Request the Azure SQL access token
-//         const sqlTokenResult = await azureCredential.getToken(
-//             "https://database.windows.net/.default"
-//         );
-
-//         if (!sqlTokenResult || !sqlTokenResult.token) {
-//             throw new Error("Failed to obtain Azure SQL access token.");
-//         }
-
-//         console.log("Azure SQL access token acquired successfully!");
-
-//         const sqlConfig = {
-//             server: `${sqlServerName}.database.windows.net`,
-//             database: sqlDatabaseName,
-//             authentication: {
-//                 type: "azure-active-directory-access-token",
-//                 options: {
-//                     token: sqlTokenResult.token
-//                 }
-//             },
-//             options: {
-//                 encrypt: true,
-//                 trustServerCertificate: false
-//             }
-//         };
-
-//         dbPool = await sql.connect(sqlConfig);
-        
-//         console.log(
-//             "SUCCESS: Connected to Azure SQL using Dedicated Managed Identity!"
-//         );
-
-//         return dbPool;
-
-//     } catch (err) {
-//         console.error(
-//             "Database connection failure:",
-//             err.message
-//         );
-//     }
-// }
+let dbPool;
 
 async function initializeDatabaseConnection() {
+
+    console.log(
+        `Connecting to Azure SQL Server "${sqlServerName}" ` +
+        `using SQL Authentication...`
+    );
+
+    const sqlConfig = {
+        server: `${sqlServerName}.database.windows.net`,
+        database: sqlDatabaseName,
+        user: dbUser,
+        password: dbPassword,
+
+        authentication: {
+            type: 'default'
+        },
+
+        options: {
+            encrypt: true,
+            trustServerCertificate: false
+        }
+    };
+
     try {
-        console.log("Connecting to Azure SQL Server via standard SQL Authentication...");
 
-        const sqlConfig = {
-            server: `${sqlServerName}.database.windows.net`,
-            database: sqlDatabaseName,
-            
-            // Define standard SQL Server credentials
-            user: dbUser,
-            password: dbPassword,
-
-            // Explicitly set type to default for username/password login
-            authentication: {
-                type: "default"
-            },
-
-            options: {
-                encrypt: true, // Crucial for Azure SQL connections
-                trustServerCertificate: false // Enforce strict certificate checks
-            }
-        };
-
-        // Initialize the connection pool
         dbPool = await sql.connect(sqlConfig);
 
         console.log(
-            "SUCCESS: Connected to Azure SQL Database using SQL Authentication!"
+            'SUCCESS: Connected to Azure SQL Database using SQL Authentication!'
         );
 
         return dbPool;
 
-    } catch (err) {
+    } catch (error) {
+
         console.error(
-            "Database connection failure:",
-            err.message
+            'Database connection failure:',
+            error.message
         );
+
+        throw error;
     }
 }
-let dbPool;
 
-initializeDatabaseConnection();
+// ==========================================
+// 4. ENTRA ID WEB LOGIN CONFIGURATION
+// ==========================================
 
+const entraClientId = process.env.Entra_ClientId;
+const entraClientSecret = process.env.Entra_ClientSecret;
 
-// Initialize M365 Entra ID Multi-Tenant Authentication Client
+const entraTenantId =
+    process.env.Entra_TenantId ||
+    process.env.ENTRA_TENANT_ID ||
+    'common';
+
+const redirectUri =
+    process.env.ENTRA_REDIRECT_URI ||
+    `https://${process.env.WEBSITE_HOSTNAME || 'localhost:3000'}/auth/callback`;
+
+if (!entraClientId) {
+
+    console.warn(
+        'WARNING: Entra_ClientId is not configured. ' +
+        'Web login will not work until Entra ID settings are supplied.'
+    );
+}
+
+if (!entraClientSecret) {
+
+    console.warn(
+        'WARNING: Entra_ClientSecret is not configured. ' +
+        'Web login will not work until Entra ID settings are supplied.'
+    );
+}
+
 const msalConfig = {
+
     auth: {
-        clientId: process.env.Entra_ClientId,
-        authority: `https://microsoftonline.com`,
-        clientSecret: process.env.Entra_ClientSecret
+
+        clientId: entraClientId,
+
+        authority:
+            `https://login.microsoftonline.com/${entraTenantId}`,
+
+        clientSecret: entraClientSecret
     }
 };
 
-const cca = new msal.ConfidentialClientApplication(msalConfig);
-
-
+const cca =
+    entraClientId && entraClientSecret
+        ? new msal.ConfidentialClientApplication(msalConfig)
+        : null;
 
 // ==========================================
-// 3. SECURITY GATE MIDDLEWARE (RBAC)
+// 5. BASIC HEALTH CHECK
+// ==========================================
+
+app.get('/health', (req, res) => {
+
+    res.status(200).json({
+
+        status: 'ok',
+
+        database:
+            dbPool
+                ? 'connected'
+                : 'not-connected'
+    });
+});
+
+// ==========================================
+// 6. SECURITY GATE MIDDLEWARE (RBAC)
 // ==========================================
 
 async function authorizeUserRole(req, res, next) {
+
     try {
+
         // Authenticated Gate Check
         if (!req.session.isAuthenticated) {
+
             return res.redirect('/login.html');
         }
 
-        const userOID = req.session.userObjectID;
-        const userEmail = req.session.userEmail;
+        const userOID =
+            req.session.userObjectID;
 
-        // Query your AppUsers table over the private VNet
-        const queryRequest = new sql.Request(dbPool);
+        const userEmail =
+            req.session.userEmail;
 
-        queryRequest.input('oid', sql.VarChar, userOID);
+        if (!dbPool) {
 
-        const dbResult = await queryRequest.query(
-            "SELECT UserRole FROM AppUsers WHERE UserObjectID = @oid"
+            return res.status(503).send(
+                'Database connection is not ready. Please try again shortly.'
+            );
+        }
+
+        const queryRequest =
+            new sql.Request(dbPool);
+
+        queryRequest.input(
+            'oid',
+            sql.VarChar,
+            userOID
         );
+
+        const dbResult =
+            await queryRequest.query(
+                "SELECT UserRole FROM AppUsers WHERE UserObjectID = @oid"
+            );
 
         // If the user doesn't exist in your SQL database yet,
         // automatically register them as a default 'Student'
         if (dbResult.recordset.length === 0) {
-            const insertRequest = new sql.Request(dbPool);
 
-            insertRequest.input('oid', sql.VarChar, userOID);
-            insertRequest.input('email', sql.VarChar, userEmail);
+            const insertRequest =
+                new sql.Request(dbPool);
+
+            insertRequest.input(
+                'oid',
+                sql.VarChar,
+                userOID
+            );
+
+            insertRequest.input(
+                'email',
+                sql.VarChar,
+                userEmail
+            );
 
             await insertRequest.query(
                 "INSERT INTO AppUsers (UserObjectID, UserEmail, UserRole) VALUES (@oid, @email, 'Student')"
             );
 
             req.userRole = 'Student';
+
         } else {
+
             // Extract the user's role from the SQL database
-            req.userRole = dbResult.recordset[0].UserRole;
+            req.userRole =
+                dbResult.recordset[0].UserRole;
         }
 
         next();
 
     } catch (error) {
+
         console.error(
             "Authorization middleware error:",
             error.message
@@ -437,28 +293,46 @@ async function authorizeUserRole(req, res, next) {
 }
 
 // ==========================================
-// 4. ROUTING & CONTROLLERS
+// 7. ROUTING & CONTROLLERS
 // ==========================================
 
 // --- THE LOGIN ROUTE INTERCEPTOR ---
 
 app.get('/auth/login', async (req, res) => {
 
-    const authCodeUrlParameters = {
-        scopes: ["user.read"],
+    if (!cca) {
 
-        // When user authenticates, bounce them to your callback landing zone
-        redirectUri: "https://azurewebsites.net"
+        return res.status(500).send(
+            'Entra ID login is not configured on this App Service.'
+        );
+    }
+
+    const authCodeUrlParameters = {
+
+        scopes: [
+            "user.read"
+        ],
+
+        // Send the user to the configured callback URL
+        redirectUri: redirectUri
     };
 
     try {
-        const response = await cca.getAuthCodeUrl(
-            authCodeUrlParameters
-        );
+
+        const response =
+            await cca.getAuthCodeUrl(
+                authCodeUrlParameters
+            );
 
         res.redirect(response);
 
     } catch (error) {
+
+        console.error(
+            "Entra login URL generation error:",
+            error.message
+        );
+
         res.status(500).send(
             "Error generating Entra ID challenge payload."
         );
@@ -469,24 +343,49 @@ app.get('/auth/login', async (req, res) => {
 
 app.get('/auth/callback', async (req, res) => {
 
+    if (!cca) {
+
+        return res.status(500).send(
+            'Entra ID login is not configured on this App Service.'
+        );
+    }
+
+    if (!req.query.code) {
+
+        return res.status(400).send(
+            'Missing authorization code from Entra ID.'
+        );
+    }
+
     const tokenRequest = {
+
         code: req.query.code,
-        scopes: ["user.read"],
-        redirectUri: "https://azurewebsites.net"
+
+        scopes: [
+            "user.read"
+        ],
+
+        redirectUri: redirectUri
     };
 
     try {
-        const authResult = await cca.acquireTokenByCode(
-            tokenRequest
-        );
 
-        const decodedToken = jwt.decode(
-            authResult.idToken
-        );
+        const authResult =
+            await cca.acquireTokenByCode(
+                tokenRequest
+            );
 
-        // Commit core identification variables directly into the session cookie
+        const decodedToken =
+            jwt.decode(
+                authResult.idToken
+            );
+
+        // Commit core identification variables directly into the session
         req.session.isAuthenticated = true;
-        req.session.userObjectID = decodedToken.oid;
+
+        req.session.userObjectID =
+            decodedToken.oid;
+
         req.session.userEmail =
             decodedToken.preferred_username ||
             decodedToken.email;
@@ -499,6 +398,7 @@ app.get('/auth/callback', async (req, res) => {
         res.redirect('/dashboard');
 
     } catch (error) {
+
         console.error(
             "Token acquisition roadblock:",
             error.message
@@ -558,27 +458,49 @@ app.post(
 
         try {
 
+            if (!blobServiceClient) {
+
+                return res.status(503).send(
+                    'Blob Storage is not configured on this App Service.'
+                );
+            }
+
+            if (!dbPool) {
+
+                return res.status(503).send(
+                    'Database connection is not ready. Please try again shortly.'
+                );
+            }
+
             // Double-check security bounds
             if (
                 req.userRole !== 'Student' &&
                 req.userRole !== 'Admin'
             ) {
+
                 return res.status(403).send(
                     "Forbidden: Only portfolio holders can upload files."
                 );
             }
 
-            const fileDescription = req.body.description;
-            const filePayload = req.file;
-            const studentOID = req.session.userObjectID;
+            const fileDescription =
+                req.body.description;
+
+            const filePayload =
+                req.file;
+
+            const studentOID =
+                req.session.userObjectID;
 
             if (!filePayload || !fileDescription) {
+
                 return res.status(400).send(
                     "Required portfolio metadata or payload structural assets are missing."
                 );
             }
 
-            // Phase 1: Stream the raw multi-media payload privately to East US Blob Container
+            // Phase 1:
+            // Stream the raw payload privately to Blob Storage
             const containerClient =
                 blobServiceClient.getContainerClient(
                     "student-assets"
@@ -605,14 +527,17 @@ app.post(
                 filePayload.buffer.length
             );
 
-            const savedBlobURL = blockBlobClient.url;
+            const savedBlobURL =
+                blockBlobClient.url;
 
-            // Phase 2: Log file text descriptions and URL link inside Azure SQL via VNet
+            // Phase 2:
+            // Log file metadata inside Azure SQL
             console.log(
                 "Syncing blob text metadata tracking rows into Azure SQL..."
             );
 
-            const queryRequest = new sql.Request(dbPool);
+            const queryRequest =
+                new sql.Request(dbPool);
 
             queryRequest.input(
                 'studentOid',
@@ -683,12 +608,20 @@ app.get(
     async (req, res) => {
 
         if (req.userRole !== 'Admin') {
+
             return res.status(403).send(
                 "Access Denied: Administrative Clearance Required."
             );
         }
 
         try {
+
+            if (!dbPool) {
+
+                return res.status(503).send(
+                    'Database connection is not ready. Please try again shortly.'
+                );
+            }
 
             const searchTerm =
                 req.query.search || '';
@@ -704,27 +637,35 @@ app.get(
 
             // Pull descriptions and file links for ALL students
             // matching the keyword search
-            const result = await queryRequest.query(`
-                SELECT
-                    s.SubmissionID,
-                    u.UserEmail,
-                    s.FileDescription,
-                    s.BlobStorageURL,
-                    s.UploadedAt
-                FROM StudentSubmissions s
-                JOIN AppUsers u
-                    ON s.StudentObjectID = u.UserObjectID
-                WHERE
-                    s.FileDescription LIKE @search
-                    OR s.OriginalFileName LIKE @search
-                ORDER BY
-                    s.UploadedAt DESC
-            `);
+            const result =
+                await queryRequest.query(`
+                    SELECT
+                        s.SubmissionID,
+                        u.UserEmail,
+                        s.FileDescription,
+                        s.BlobStorageURL,
+                        s.UploadedAt
+                    FROM StudentSubmissions s
+                    JOIN AppUsers u
+                        ON s.StudentObjectID = u.UserObjectID
+                    WHERE
+                        s.FileDescription LIKE @search
+                        OR s.OriginalFileName LIKE @search
+                    ORDER BY
+                        s.UploadedAt DESC
+                `);
 
-            // Send the JSON metadata list back to your Admin HTML page
-            res.json(result.recordset);
+            // Send the JSON metadata list back to Admin HTML page
+            res.json(
+                result.recordset
+            );
 
         } catch (error) {
+
+            console.error(
+                "Admin search error:",
+                error.message
+            );
 
             res.status(500).send(
                 "Failed to retrieve master asset list."
@@ -732,3 +673,41 @@ app.get(
         }
     }
 );
+
+// ==========================================
+// 8. APPLICATION STARTUP
+// ==========================================
+
+const port =
+    Number(process.env.PORT) || 3000;
+
+async function startServer() {
+
+    try {
+
+        // Do not start accepting HTTP traffic until
+        // the database connection is established.
+        await initializeDatabaseConnection();
+
+        app.listen(
+            port,
+            () => {
+
+                console.log(
+                    `CCIQ server listening on port ${port}`
+                );
+            }
+        );
+
+    } catch (error) {
+
+        console.error(
+            'FATAL: Application startup failed.',
+            error.message
+        );
+
+        process.exit(1);
+    }
+}
+
+startServer();
