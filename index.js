@@ -4,6 +4,8 @@ const msal = require('@azure/msal-node');
 const multer = require('multer');
 const sql = require('mssql');
 const { DefaultAzureCredential } = require('@azure/identity');
+const { ManagedIdentityCredential } = require('@azure/identity');
+
 const { BlobServiceClient } = require('@azure/storage-blob');
 const jwt = require('jsonwebtoken');
 const path = require('path');
@@ -223,12 +225,60 @@ const blobServiceClient = new BlobServiceClient(
 //         console.error("Database connection failure:", err.message);
 //     }
 // }
+// async function initializeDatabaseConnection() {
+//     try {
+//         console.log("Requesting access token for Azure SQL via native environment settings...");
+
+//         // Leave this empty! It will automatically discover and use the App Service identity.
+//         const azureCredential = new DefaultAzureCredential();
+
+//         // Request the Azure SQL access token
+//         const sqlTokenResult = await azureCredential.getToken(
+//             "https://windows.net"
+//         );
+
+//         if (!sqlTokenResult || !sqlTokenResult.token) {
+//             throw new Error("Failed to obtain Azure SQL access token.");
+//         }
+
+//         console.log("Azure SQL access token acquired successfully!");
+
+//         const sqlConfig = {
+//             server: `${sqlServerName}.database.windows.net`,
+//             database: sqlDatabaseName,
+//             authentication: {
+//                 type: "azure-active-directory-access-token",
+//                 options: {
+//                     token: sqlTokenResult.token
+//                 }
+//             },
+//             options: {
+//                 encrypt: true,
+//                 trustServerCertificate: false
+//             }
+//         };
+
+//         dbPool = await sql.connect(sqlConfig);
+        
+//         console.log(
+//             "SUCCESS: Connected to Azure SQL using Managed Identity!"
+//         );
+
+//         return dbPool;
+
+//     } catch (err) {
+//         console.error(
+//             "Database connection failure:",
+//             err.message
+//         );
+//     }
+// }
 async function initializeDatabaseConnection() {
     try {
-        console.log("Requesting access token for Azure SQL via native environment settings...");
+        console.log("Forcing dedicated ManagedIdentityCredential for Azure SQL...");
 
-        // Leave this empty! It will automatically discover and use the App Service identity.
-        const azureCredential = new DefaultAzureCredential();
+        // Bypasses DefaultAzureCredential's environment checks and targets the local identity directly
+        const azureCredential = new ManagedIdentityCredential();
 
         // Request the Azure SQL access token
         const sqlTokenResult = await azureCredential.getToken(
@@ -259,7 +309,7 @@ async function initializeDatabaseConnection() {
         dbPool = await sql.connect(sqlConfig);
         
         console.log(
-            "SUCCESS: Connected to Azure SQL using Managed Identity!"
+            "SUCCESS: Connected to Azure SQL using Dedicated Managed Identity!"
         );
 
         return dbPool;
@@ -271,7 +321,6 @@ async function initializeDatabaseConnection() {
         );
     }
 }
-
 let dbPool;
 
 initializeDatabaseConnection();
