@@ -180,16 +180,57 @@ const blobServiceClient = new BlobServiceClient(
 //         );
 //     }
 // }
+// async function initializeDatabaseConnection() {
+//     try {
+//         console.log("Requesting access token for Azure SQL explicitly under the WGU Tenant...");
+
+//         // FORCE DefaultAzureCredential to target your WGU Tenant ID directly
+//         const azureCredential = new DefaultAzureCredential({
+//             tenantId: "422972e9-90c8-40e4-a9f2-f2b5cd1c4888" 
+//         });
+
+//         // Request the Azure SQL access token inside that specific WGU boundary
+//         const sqlTokenResult = await azureCredential.getToken(
+//             "https://windows.net"
+//         );
+
+//         if (!sqlTokenResult || !sqlTokenResult.token) {
+//             throw new Error("Failed to obtain Azure SQL access token.");
+//         }
+
+//         console.log("Azure SQL access token acquired.");
+
+//         const sqlConfig = {
+//             server: `${sqlServerName}.database.windows.net`,
+//             database: sqlDatabaseName,
+//             authentication: {
+//                 type: "azure-active-directory-access-token",
+//                 options: {
+//                     token: sqlTokenResult.token
+//                 }
+//             },
+//             options: {
+//                 encrypt: true,
+//                 trustServerCertificate: false
+//             }
+//         };
+
+//         dbPool = await sql.connect(sqlConfig);
+//         console.log("SUCCESS: Connected to WGU Azure SQL using WGU Tenant Identity!");
+//         return dbPool;
+
+//     } catch (err) {
+//         console.error("Database connection failure:", err.message);
+//     }
+// }
 async function initializeDatabaseConnection() {
     try {
-        console.log("Requesting access token for Azure SQL explicitly under the WGU Tenant...");
+        console.log("Requesting access token for Azure SQL via native environment settings...");
 
-        // FORCE DefaultAzureCredential to target your WGU Tenant ID directly
-        const azureCredential = new DefaultAzureCredential({
-            tenantId: "422972e9-90c8-40e4-a9f2-f2b5cd1c4888" 
-        });
+        // Leave this empty! It will automatically discover and use the App Service identity.
+        const azureCredential = new DefaultAzureCredential();
 
-        // Request the Azure SQL access token inside that specific WGU boundary
+        // Request the Azure SQL access token
         const sqlTokenResult = await azureCredential.getToken(
             "https://windows.net"
         );
@@ -198,7 +239,7 @@ async function initializeDatabaseConnection() {
             throw new Error("Failed to obtain Azure SQL access token.");
         }
 
-        console.log("Azure SQL access token acquired.");
+        console.log("Azure SQL access token acquired successfully!");
 
         const sqlConfig = {
             server: `${sqlServerName}.database.windows.net`,
@@ -216,11 +257,18 @@ async function initializeDatabaseConnection() {
         };
 
         dbPool = await sql.connect(sqlConfig);
-        console.log("SUCCESS: Connected to WGU Azure SQL using WGU Tenant Identity!");
+        
+        console.log(
+            "SUCCESS: Connected to Azure SQL using Managed Identity!"
+        );
+
         return dbPool;
 
     } catch (err) {
-        console.error("Database connection failure:", err.message);
+        console.error(
+            "Database connection failure:",
+            err.message
+        );
     }
 }
 
