@@ -506,7 +506,7 @@ app.post(
                 blobServiceClient.getContainerClient(
                     "student-assets"
                 );
-
+            console.log("PHASE 1: Checking Blob Storage container...");
             await containerClient.createIfNotExists({
                 accessType: 'blob'
             });
@@ -522,12 +522,12 @@ app.post(
             console.log(
                 "Uploading file payload straight into Blob Storage via Managed Identity..."
             );
-
+            console.log("PHASE 1: Uploading file to Blob Storage...");
             await blockBlobClient.upload(
                 filePayload.buffer,
                 filePayload.buffer.length
             );
-
+            console.log("PHASE 1 SUCCESS: Blob upload completed.");
             const savedBlobURL =
                 blockBlobClient.url;
 
@@ -588,6 +588,20 @@ app.post(
             );
 
         } catch (error) {
+             console.error("Portfolio submission failed.");
+            console.error("Error message:", error.message);
+            console.error("Error code:", error.code);
+            console.error("HTTP status:", error.statusCode);
+            console.error("SQL error number:", error.number);
+            console.error("SQL state:", error.state);
+
+            if (error.stack) {
+                console.error("Stack trace:", error.stack);
+            }
+
+            res.status(500).send(
+                "Critical server infrastructure syncing exception occurred. Check server logs for details."
+            );
 
             console.error(
                 "Decoupled pipeline structural fault:",
