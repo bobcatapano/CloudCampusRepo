@@ -423,7 +423,6 @@ app.get(
         console.log("Role lookup:", {
     userObjectID: req.session.userObjectID,
     userEmail: req.session.userEmail,
-    databaseRole: result.recordset[0]?.UserRole,
     userRole: req.userRole
 });
         if (req.userRole === 'Admin') {
